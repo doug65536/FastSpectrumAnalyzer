@@ -9,17 +9,26 @@ void AudioTest::onNotify()
     while ((aio->bytesAvailable() >= sizeof(buf))
            && (readresult = aio->read((char*)buf, sizeof(buf))) > 0)
     {
-        qDebug() << readresult << " <- read result";
-        qDebug() << "processing " << readresult << " samples";
+//        qDebug() << readresult << " <- read result";
+//        qDebug() << "processing " << readresult << " samples";
 
-        emit incoming(buf, std::end(buf)-std::begin(buf));
+        auto stBuf = std::begin(buf);
+        auto enBuf = stBuf + readresult;
 
-//        Stopwatch sw;
-//        sw.start();
-//        fft.process(std::begin(buf), std::end(buf), std::begin(result));
-//        sw.update();
+        Stopwatch sw;
+        sw.start();
+        fft.process(stBuf, enBuf, std::begin(result));
+        sw.update();
 
-//        qDebug() << sw.elapsedMicroseconds() << " microseconds";
+        std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
+        [&](float &f)
+        {
+            return int16_t(f * 16.0f + 0.5f);
+        });
+
+        emit incoming(quantizedResult, FFTType::halfPoints);
+
+        qDebug() << sw.elapsedMicroseconds() << " microseconds";
     }
 }
 

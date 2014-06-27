@@ -364,6 +364,7 @@ class __attribute__((aligned(16))) FFT
 public:
     typedef Real value_type;
 
+    static constexpr int log2Points = logPoints;
     static constexpr int points = 1 << logPoints;
     static constexpr int halfPoints = 1 << (logPoints-1);
 

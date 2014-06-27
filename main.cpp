@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     MainWindow w;
     w.show();
 
-    w.connect(test, SIGNAL(incoming(const int16_t*)), &w, SLOT(addLine(const int16_t*)));
+    w.connect(test, SIGNAL(incoming(const int16_t*, size_t)), &w, SLOT(addLine(const int16_t*, size_t)));
 
 //    test->stop();
 //    delete test;

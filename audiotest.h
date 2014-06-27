@@ -24,7 +24,8 @@ public:
     void stop();
 
 private:
-    FFT<float, 10> fft;
+    typedef FFT<float, 12> FFTType;
+    FFTType fft;
 
     QAudioInput *ai;
     QAudioFormat afmt;
@@ -32,7 +33,8 @@ private:
 
     // 1/60th sec
     int16_t buf[44100/120*2];
-    float result[44100/120];
+    float result[FFTType::halfPoints];
+    int16_t quantizedResult[FFTType::halfPoints];
 
 signals:
 
