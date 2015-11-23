@@ -1,6 +1,7 @@
 #ifndef AUDIOTEST_H
 #define AUDIOTEST_H
 
+#include <memory>
 #include <QObject>
 #include <QAudioInput>
 #include "fft.h"
@@ -14,6 +15,7 @@ signals:
 
 public slots:
     void onNotify();
+    void onReadyRead();
 
 public:
     explicit AudioTest(QObject *parent = nullptr);
@@ -23,13 +25,17 @@ public:
     void start();
     void stop();
 
+    int sampleRate() const;
+
 private:
-    typedef FFT<float, 12> FFTType;
-    FFTType fft;
+    typedef FFT<float, 14> FFTType;
+    std::unique_ptr<FFTType> fft;
 
     QAudioInput *ai;
     QAudioFormat afmt;
     QIODevice *aio;
+
+    int rate;
 
     // 1/60th sec
     int16_t buf[44100/120*2];

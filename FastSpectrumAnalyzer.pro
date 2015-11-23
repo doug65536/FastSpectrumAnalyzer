@@ -11,7 +11,6 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = FastSpectrumAnalyzer
 TEMPLATE = app
 
-
 SOURCES += main.cpp\
         mainwindow.cpp \
     fft.cpp \
@@ -36,8 +35,12 @@ FORMS    += mainwindow.ui
 CONFIG += c++11
 CONFIG += mobility
 CONFIG += warn_on
+CONFIG += threads
 
 MOBILITY = 
+
+QMAKE_CXXFLAGS += -march=native
+QMAKE_LFLAGS += -march=native
 
 ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 

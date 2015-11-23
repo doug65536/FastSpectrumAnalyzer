@@ -11,7 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    vpv = new VoicePrintView(1024, 1024, this);
+    vpv = new VoicePrintView(2048, 710, this);
     setCentralWidget(vpv);
 }
 

@@ -8,26 +8,6 @@
 #include "stopwatch.h"
 #include "asserts.h"
 
-// test hack
-
-// strange peaks:
-//  16 128                7
-//  15: 90.5097
-//  14: 64                6
-//  13: 45.2548
-//  12: 32                5
-//  11: 22.6274
-//  10: 16                4
-//   9: 11.3137
-//   8: 8                 3
-//   7: 5.65685
-//   6: 4                 2
-//   5: 2.82843
-//   4: 2                 1
-//   3: 1.41421
-//   2: 1                 0
-//   1: 0
-
 static double worstError0, worstError1, worstError2;
 
 template<typename T, int logPoints>

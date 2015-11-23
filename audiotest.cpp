@@ -3,21 +3,21 @@
 #include <QDebug>
 #include "stopwatch.h"
 
-void AudioTest::onNotify()
+void AudioTest::onReadyRead()
 {
+    qint64 available;
     qint64 readresult;
-    while ((aio->bytesAvailable() >= sizeof(buf))
-           && (readresult = aio->read((char*)buf, sizeof(buf))) > 0)
+    while ((readresult = aio->read((char*)buf, sizeof(buf))) > 0)
     {
 //        qDebug() << readresult << " <- read result";
 //        qDebug() << "processing " << readresult << " samples";
 
         auto stBuf = std::begin(buf);
-        auto enBuf = stBuf + readresult;
+        auto enBuf = stBuf + (readresult / sizeof(short));
 
         Stopwatch sw;
         sw.start();
-        fft.process(stBuf, enBuf, std::begin(result));
+        fft->process(stBuf, enBuf, std::begin(result), 32.0);
         sw.update();
 
         std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
@@ -26,17 +26,17 @@ void AudioTest::onNotify()
             return int16_t(f * 16.0f + 0.5f);
         });
 
-        emit incoming(quantizedResult, FFTType::halfPoints);
+        emit incoming(quantizedResult, FFTType::halfPoints >> 2);
 
-        qDebug() << sw.elapsedMicroseconds() << " microseconds";
+        //qDebug() << sw.elapsedMicroseconds() << " microseconds";
     }
 }
 
 AudioTest::AudioTest(QObject *parent)
     : QObject(parent)
-    , fft(44100)
     , ai(nullptr)
     , aio(nullptr)
+    , rate(0)
 {
 }
 
@@ -46,7 +46,17 @@ AudioTest::~AudioTest()
 
 void AudioTest::start()
 {
-    afmt.setSampleRate(44100);
+    QList<QAudioDeviceInfo> devices =
+            QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
+
+    std::for_each(devices.begin(), devices.end(),
+                  [](QAudioDeviceInfo& device) {
+        qDebug() << device.deviceName();
+    });
+
+    qDebug() << "Default == " << QAudioDeviceInfo::defaultInputDevice().deviceName();
+
+    afmt.setSampleRate(48000);
     afmt.setChannelCount(1);
     afmt.setCodec("audio/pcm");
     afmt.setByteOrder(QAudioFormat::LittleEndian);
@@ -59,19 +69,31 @@ void AudioTest::start()
     if (!deviceinfo.isFormatSupported(afmt))
         deviceinfo.nearestFormat(afmt);
 
-    //delete ai;
     QAudio::Error err;
-    ai = new QAudioInput(afmt, this);
+    ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(44100/4);
-    ai->setNotifyInterval(16);
+    ai->setNotifyInterval(4);
+    connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
+
     aio = ai->start();
+    connect(aio, SIGNAL(readyRead()), this, SLOT(onReadyRead()));
 
-    aio->connect(aio, SIGNAL(readyRead()), this, SLOT(onNotify()));
-
-    qDebug() << "State=" << ai->state();
+    //qDebug() << "State=" << ai->state();
     err = ai->error();
-    qDebug() << "Err=" << err;
+    //qDebug() << "Err=" << err;
 
+    ai->resume();
+
+    //qDebug() << "State=" << ai->state();
+    err = ai->error();
+    //qDebug() << "Err=" << err;
+
+    fft.reset(new FFTType(afmt.sampleRate()));
+}
+
+void AudioTest::onNotify()
+{
+    //qDebug() << "State=" << ai->state();
 }
 
 void AudioTest::stop()
