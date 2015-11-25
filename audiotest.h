@@ -2,25 +2,26 @@
 #define AUDIOTEST_H
 
 #include <memory>
+#include <array>
 #include <QObject>
 #include <QAudioInput>
 #include "fft.h"
 
-class AudioTest : public QObject
+class AudioReader : public QObject
 {
     Q_OBJECT
 
 signals:
-    void incoming(int16_t const* data, size_t sampleCount);
+    void incoming(std::int16_t const* data, std::size_t sampleCount);
 
 public slots:
     void onNotify();
     void onReadyRead();
 
 public:
-    explicit AudioTest(QObject *parent = nullptr);
+    explicit AudioReader(QObject *parent = nullptr);
 
-    ~AudioTest();
+    ~AudioReader();
 
     void start();
     void stop();
@@ -28,7 +29,7 @@ public:
     int sampleRate() const;
 
 private:
-    typedef FFT<float, 14> FFTType;
+    typedef FFT<float, 12> FFTType;
     std::unique_ptr<FFTType> fft;
 
     QAudioInput *ai;
@@ -37,10 +38,10 @@ private:
 
     int rate;
 
-    // 1/60th sec
-    int16_t buf[44100/120*2];
+    std::array<std::int16_t,3200> buf;
+    int bufLevel;
     float result[FFTType::halfPoints];
-    int16_t quantizedResult[FFTType::halfPoints];
+    std::int16_t quantizedResult[FFTType::halfPoints];
 
 signals:
 

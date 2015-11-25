@@ -43,7 +43,7 @@ int64_t testffttype(FFT<T, logPoints> &fft, bool fulltest = false)
         if (bestMicroseconds > microseconds)
             bestMicroseconds = microseconds;
 
-//        for (size_t i = 0, e = input.size(); i != e; ++i)
+//        for (std::size_t i = 0, e = input.size(); i != e; ++i)
 //        {
 //            input[i] = Real(sin(2 * 3.14159265358979323 * freq * i / fft.maxFreq())
 //                            + 0.001 * sin(2 * 3.14159265358979323 * freq2 * i / fft.maxFreq()));

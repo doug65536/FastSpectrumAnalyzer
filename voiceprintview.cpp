@@ -1,26 +1,26 @@
 #include "voiceprintview.h"
 #include <QPainter>
+#include <QtGui>
 
-VoicePrintView::VoicePrintView(int width, int length, QWidget *parent)
+VoicePrintView::VoicePrintView(QWidget *parent)
     : QWidget(parent)
-    , img(new QImage(width, length, QImage::Format_RGBX8888))
-    , width(width)
-    , length(length)
     , place(0)
 {
+    img = new QImage(width(), height(), QImage::Format_RGBX8888);
     setAttribute(Qt::WA_OpaquePaintEvent, true);
 }
 
-void VoicePrintView::deliverSamples(const int16_t *data, int count)
+void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
 {
     QRgb* line = (QRgb*)img->scanLine(place++);
-    if (place >= length)
+    if (place >= img->height())
         place = 0;
-    std::transform(data, data + count, line, [](QRgb const& pixel) {
-        int v = std::min(int(0xFF), int(pixel >> 8) & 0xFF);
+    if (count > img->width())
+        count = img->width();
+    std::transform(data, data + count, line, [](std::int16_t const& sample) {
+        int v = std::min(int(0xFF), int(sample >> 8) & 0xFF);
         return QColor::fromRgb(v, v, v).rgb();
     });
-    //update(QRect(0, place, width, 1));
     update();
 }
 
@@ -64,4 +64,28 @@ void VoicePrintView::paintEvent(QPaintEvent *pe)
     
     //qp->drawImage(QPoint(0,0), *img);
     qp->end();
+}
+
+void VoicePrintView::resizeEvent(QResizeEvent *re)
+{
+    QSize viewSize = re->size();
+    QSize imgSize = img->size();
+    int heightDiff;
+
+    if (viewSize.height() != imgSize.height() ||
+            viewSize.width() != imgSize.width()) {
+        heightDiff = viewSize.height() - imgSize.height();
+        place += heightDiff;
+        if (place > viewSize.height())
+            place = 0;
+        // Keep bottom left part of old image
+        QImage *newimage = new QImage(
+                    img->copy(0, imgSize.height() - viewSize.height(),
+                              viewSize.width(), viewSize.height()));
+        delete img;
+        img = newimage;
+
+        if (place >= viewSize.height())
+            place = 0;
+    }
 }

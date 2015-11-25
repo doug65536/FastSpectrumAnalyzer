@@ -11,20 +11,18 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    vpv = new VoicePrintView(2048, 710, this);
+    audioReader = new AudioReader(this);
+
+    vpv = new VoicePrintView(this);
     setCentralWidget(vpv);
+
+    connect(audioReader, SIGNAL(incoming(const std::int16_t*,std::size_t)),
+            vpv, SLOT(deliverSamples(const std::int16_t*,std::size_t)));
+
+    audioReader->start();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-}
-
-void MainWindow::addLine(const int16_t *data, size_t sampleCount)
-{
-//    auto mx = std::max_element(data, data+sampleCount);
-//    auto mn = std::min_element(data, data+sampleCount);
-//    qDebug() << "min sample=" << mn << " max sample=" << mx;
-
-    vpv->deliverSamples(data, sampleCount);
 }

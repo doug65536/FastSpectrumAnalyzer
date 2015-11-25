@@ -9,23 +9,20 @@ class VoicePrintView : public QWidget
 public:
     // Width represents the number of points
     // Length represents the number of lines of scrollback
-    VoicePrintView(int width = 0, int length = 0, QWidget *parent = 0);
-
-    void deliverSamples(int16_t const *data, int count);
+    VoicePrintView(QWidget *parent = 0);
 
 protected:
     void paintEvent(QPaintEvent *pe);
+    void resizeEvent(QResizeEvent *re);
 
 private:
     QImage *img;
-    int width, length, place;
+    int place;
 
 signals:
 
-
 public slots:
-
-
+    void deliverSamples(std::int16_t const *data, std::size_t count);
 };
 
 #endif // VOICEPRINTVIEW_H

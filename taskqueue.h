@@ -227,7 +227,7 @@ private:
 
 	Lazy<Lock> whenLock;
 	Lazy<Cond> whenCond;
-	size_t got, expect;
+    std::size_t got, expect;
 	std::atomic_uint refcount;
 	Task::CallbackList thens;
 };

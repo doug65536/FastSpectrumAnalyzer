@@ -12,6 +12,49 @@
 #include <iostream>
 #include <complex>
 
+#if 0 && defined(__GNUC__) && defined(__SSE4_2__)
+#include <xmmintrin.h>
+template<typename T>
+class Complex
+{
+public:
+    Complex& operator+=(Complex const& r) noexcept
+    {
+        vec += r.vec;
+    }
+    Complex& operator-=(Complex const& r) noexcept
+    {
+        vec -= r.vec;
+    }
+    Complex& operator*=(Complex const& r) noexcept
+    {
+        // a=((s1.rel)*(s2.rel))-((s1.img)*(s2.img));
+        // b=((s1.rel)*(s2.img))+((s2.rel)*(s1.img));
+        __m128d
+_mm_dp_ps()
+        vec2 swapped = __builtin_shuffle(r.vec, ivec2{1, 0});
+    }
+    Complex operator+(Complex const& r) const noexcept;
+    Complex operator-(Complex const& r) const noexcept;
+    Complex operator*(Complex const& r) const noexcept;
+
+    T real() const noexcept;
+    T imag() const noexcept;
+
+    void real(T value) noexcept;
+    void imag(T value) noexcept;
+
+private:
+    typedef double __attribute__((vector_size(16))) vec2;
+    typedef __int64_t __attribute__((vector_size(16))) ivec2;
+
+    vec2 vec;
+};
+#else
+template<typename T>
+using Complex = std::complex<T>;
+#endif
+
 template<typename T>
 struct Quantizer;
 
@@ -135,17 +178,17 @@ public:
             step += step;
         }
 //        std::transform(x.data(), x.data() + halfPoints, output.data(),
-//                       [](std::complex<Real>& value) {
+//                       [](Complex<Real>& value) {
 //            return std::abs(value) * normalizer;
 //        });
-        //std::complex<Real>::mod(output.data(), x.data(), halfPoints, normalizer);
+        //Complex<Real>::mod(output.data(), x.data(), halfPoints, normalizer);
     }
 
     void process()
     {
         transform();
         std::transform(x.data(), x.data() + halfPoints, output.data(),
-                       [](std::complex<Real>& value) {
+                       [](Complex<Real>& value) {
             return std::abs(value) * normalizer;
         });
         //Complex<Real>::mod(output.data(), x.data(), halfPoints, normalizer);
@@ -175,12 +218,12 @@ public:
 
     void put(int i, Real val) noexcept
     {
-        x[bitrev[i]] = std::complex<Real>(val);
+        x[bitrev[i]] = Complex<Real>(val);
     }
 
     void add(int i, Real val) noexcept
     {
-        x[bitrev[i]] += std::complex<Real>(val);
+        x[bitrev[i]] += Complex<Real>(val);
     }
 
     void clear() noexcept
@@ -194,12 +237,12 @@ public:
         auto step = Real(2) * Real(3.14159265358979323) * freq / sampleRate;
         if (mix)
         {
-            for (size_t i = 0, e = tape.size(); i != e; ++i)
+            for (std::size_t i = 0, e = tape.size(); i != e; ++i)
                 add(i, amplitude * Real(std::sin(step * i)));
         }
         else
         {
-            for (size_t i = 0, e = tape.size(); i != e; ++i)
+            for (std::size_t i = 0, e = tape.size(); i != e; ++i)
                 put(i, amplitude * Real(std::sin(step * i)));
         }
     }
@@ -273,7 +316,7 @@ public:
             std::cout << "Frequency: " << freq << ", Amplitude: " << amplitude << std::endl;
             // Mix a sine wave at that amplitude
             auto step = basestep * freq;
-            for (size_t r = 0, e = result.size(); r != e; ++r)
+            for (std::size_t r = 0, e = result.size(); r != e; ++r)
                 result[r] += Real(amplitude * sin(step * r));
         }
         std::copy(result.begin(), result.end(), out);
@@ -306,7 +349,7 @@ private:
             {
                 Real re = std::cos(Real(2) * Real(3.14159265358979323) * i / l2);
                 Real im = -std::sin(Real(2) * Real(3.14159265358979323) * i / l2);
-                w[level][i] = std::complex<Real>(re, im);
+                w[level][i] = Complex<Real>(re, im);
             }
             l2 *= 2;
         }
@@ -392,13 +435,18 @@ private:
     //typedef Compl
     typedef std::array<Real, points> TapeContainer;
     typedef std::array<int, points> BitRevContainer;
-    typedef std::array<std::complex<Real>, points> XContainer;
+    typedef std::array<Complex<Real>, points> XContainer;
     typedef std::array<XContainer, logPoints> WContainer;
 
+    // Gaps
     TapeContainer tape;
+    __m128 gap0;
     BitRevContainer bitrev;
+    __m128 gap1;
     XContainer x;
+    __m128 gap2;
     WContainer w;
+    __m128 gap3;
     ResultContainer output;
 
     int sampleRate;

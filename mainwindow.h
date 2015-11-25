@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "voiceprintview.h"
+#include "audiotest.h"
 
 namespace Ui {
 class MainWindow;
@@ -17,9 +18,9 @@ public:
     ~MainWindow();
 
 public slots:
-    void addLine(int16_t const* data, size_t sampleCount);
 
 private:
+    AudioReader *audioReader;
     Ui::MainWindow *ui;
     VoicePrintView *vpv;
 };

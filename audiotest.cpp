@@ -3,48 +3,62 @@
 #include <QDebug>
 #include "stopwatch.h"
 
-void AudioTest::onReadyRead()
+void AudioReader::onReadyRead()
 {
-    qint64 available;
     qint64 readresult;
-    while ((readresult = aio->read((char*)buf, sizeof(buf))) > 0)
+
+    while ((readresult = aio->read((char*)(buf.data() + bufLevel),
+            buf.size() - bufLevel)) > 0)
     {
-//        qDebug() << readresult << " <- read result";
-//        qDebug() << "processing " << readresult << " samples";
+        bufLevel += readresult / sizeof(short);
 
-        auto stBuf = std::begin(buf);
-        auto enBuf = stBuf + (readresult / sizeof(short));
+        auto beginBuf = std::begin(buf);
+        auto stBuf = beginBuf;
+        auto enBuf = stBuf + bufLevel;
+        while (stBuf < enBuf) {
+            auto enMax = stBuf + ai->format().sampleRate() / 60;
 
-        Stopwatch sw;
-        sw.start();
-        fft->process(stBuf, enBuf, std::begin(result), 32.0);
-        sw.update();
+            // If there isn't enough, done
+            if (enMax > enBuf)
+                break;
 
-        std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
-        [&](float &f)
-        {
-            return int16_t(f * 16.0f + 0.5f);
-        });
+            Stopwatch sw;
+            sw.start();
+            fft->process(stBuf, enMax, std::begin(result), 32.0);
+            sw.update();
 
-        emit incoming(quantizedResult, FFTType::halfPoints >> 2);
+            std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
+            [&](float &f)
+            {
+                return std::int16_t(f * 16.0f + 0.5f);
+            });
 
-        //qDebug() << sw.elapsedMicroseconds() << " microseconds";
+            emit incoming(quantizedResult, FFTType::halfPoints);
+
+            stBuf = enMax;
+        }
+
+        if (stBuf != beginBuf) {
+            bufLevel = enBuf - stBuf;
+            std::copy(stBuf, enBuf, beginBuf);
+        }
     }
 }
 
-AudioTest::AudioTest(QObject *parent)
+AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
     , rate(0)
+    , bufLevel(0)
 {
 }
 
-AudioTest::~AudioTest()
+AudioReader::~AudioReader()
 {
 }
 
-void AudioTest::start()
+void AudioReader::start()
 {
     QList<QAudioDeviceInfo> devices =
             QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
@@ -55,7 +69,7 @@ void AudioTest::start()
     });
 
     qDebug() << "Default == " << QAudioDeviceInfo::defaultInputDevice().deviceName();
-
+    
     afmt.setSampleRate(48000);
     afmt.setChannelCount(1);
     afmt.setCodec("audio/pcm");
@@ -72,7 +86,8 @@ void AudioTest::start()
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(44100/4);
-    ai->setNotifyInterval(4);
+    ai->setNotifyInterval(1);
+    qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
 
     aio = ai->start();
@@ -91,12 +106,12 @@ void AudioTest::start()
     fft.reset(new FFTType(afmt.sampleRate()));
 }
 
-void AudioTest::onNotify()
+void AudioReader::onNotify()
 {
     //qDebug() << "State=" << ai->state();
 }
 
-void AudioTest::stop()
+void AudioReader::stop()
 {
     aio->close();
     ai->stop();
