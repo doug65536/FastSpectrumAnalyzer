@@ -15,6 +15,7 @@ void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
     QRgb* line = (QRgb*)img->scanLine(place++);
     if (place >= img->height())
         place = 0;
+    // If it is too many, reduce it
     if (count > img->width())
         count = img->width();
     std::transform(data, data + count, line, [](std::int16_t const& sample) {
@@ -73,9 +74,12 @@ void VoicePrintView::resizeEvent(QResizeEvent *re)
     int heightDiff;
 
     if (viewSize.height() != imgSize.height() ||
-            viewSize.width() != imgSize.width()) {
+            viewSize.width() != imgSize.width())
+    {
         heightDiff = viewSize.height() - imgSize.height();
         place += heightDiff;
+        while (place < 0 && viewSize.height())
+            place += viewSize.height();
         if (place > viewSize.height())
             place = 0;
         // Keep bottom left part of old image

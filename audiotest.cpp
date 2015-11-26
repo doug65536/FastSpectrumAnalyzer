@@ -16,7 +16,7 @@ void AudioReader::onReadyRead()
         auto stBuf = beginBuf;
         auto enBuf = stBuf + bufLevel;
         while (stBuf < enBuf) {
-            auto enMax = stBuf + ai->format().sampleRate() / 60;
+            auto enMax = stBuf + batchSize;
 
             // If there isn't enough, done
             if (enMax > enBuf)
@@ -49,8 +49,9 @@ AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
-    , rate(0)
     , bufLevel(0)
+    , batchRatePerSec(960)
+    , batchSize(0)
 {
 }
 
@@ -85,10 +86,12 @@ void AudioReader::start()
 
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
-    ai->setBufferSize(44100/4);
-    ai->setNotifyInterval(1);
+    ai->setBufferSize(8192);
+    ai->setNotifyInterval(16);
     qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
+
+    batchSize = afmt.sampleRate() / batchRatePerSec;
 
     aio = ai->start();
     connect(aio, SIGNAL(readyRead()), this, SLOT(onReadyRead()));

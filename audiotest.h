@@ -28,6 +28,9 @@ public:
 
     int sampleRate() const;
 
+    void setBatchRate(int ratePerSec) noexcept;
+    int getBatchRate() const noexcept;
+
 private:
     typedef FFT<float, 12> FFTType;
     std::unique_ptr<FFTType> fft;
@@ -36,7 +39,8 @@ private:
     QAudioFormat afmt;
     QIODevice *aio;
 
-    int rate;
+    int batchRatePerSec;
+    int batchSize;
 
     std::array<std::int16_t,3200> buf;
     int bufLevel;

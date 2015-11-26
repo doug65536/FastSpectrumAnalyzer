@@ -41,12 +41,10 @@ CONFIG += rtti
 
 MOBILITY = 
 
-QMAKE_CXXFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize
-QMAKE_LFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize
+QMAKE_CXXFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize -pg
+QMAKE_LFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize -pg
 QMAKE_CXXFLAGS_RELEASE += -O3
 QMAKE_LFLAGS_RELEASE += -O3
-QMAKE_CXXFLAGS_RELEASE -= -O2
-QMAKE_LFLAGS_RELEASE -= -O2
 QMAKE_CXXFLAGS_RELEASE -= -O2
 QMAKE_LFLAGS_RELEASE -= -O2
 
