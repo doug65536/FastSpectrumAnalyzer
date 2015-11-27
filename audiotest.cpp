@@ -15,6 +15,7 @@ void AudioReader::onReadyRead()
         auto beginBuf = std::begin(buf);
         auto stBuf = beginBuf;
         auto enBuf = stBuf + bufLevel;
+
         while (stBuf < enBuf) {
             auto enMax = stBuf + batchSize;
 
@@ -24,18 +25,19 @@ void AudioReader::onReadyRead()
 
             Stopwatch sw;
             sw.start();
-            fft->process(stBuf, enMax, std::begin(result), 32.0);
+            fft->process(stBuf, enMax, std::begin(result), 1.6);
             sw.update();
 
+            stBuf = enMax;
+
             std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
-            [&](float &f)
+            [&](float f)
             {
-                return std::int16_t(f * 16.0f + 0.5f);
+                return (std::min)((std::numeric_limits<std::int16_t>::max)(),
+                        std::int16_t(f + 0.5f));
             });
 
             emit incoming(quantizedResult, FFTType::halfPoints);
-
-            stBuf = enMax;
         }
 
         if (stBuf != beginBuf) {
@@ -49,14 +51,18 @@ AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
-    , bufLevel(0)
-    , batchRatePerSec(960)
+    , batchRatePerSec(120)
     , batchSize(0)
+    , bufLevel(0)
 {
 }
 
 AudioReader::~AudioReader()
 {
+    if (aio)
+        aio->close();
+    if (ai)
+        ai->stop();
 }
 
 void AudioReader::start()
@@ -87,7 +93,7 @@ void AudioReader::start()
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(8192);
-    ai->setNotifyInterval(16);
+    ai->setNotifyInterval(4);
     qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
 
@@ -98,7 +104,8 @@ void AudioReader::start()
 
     //qDebug() << "State=" << ai->state();
     err = ai->error();
-    //qDebug() << "Err=" << err;
+    if (err)
+        qDebug() << "Err=" << err;
 
     ai->resume();
 

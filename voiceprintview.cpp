@@ -18,9 +18,17 @@ void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
     // If it is too many, reduce it
     if (count > img->width())
         count = img->width();
-    std::transform(data, data + count, line, [](std::int16_t const& sample) {
-        int v = std::min(int(0xFF), int(sample >> 8) & 0xFF);
-        return QColor::fromRgb(v, v, v).rgb();
+    std::transform(data, data + count, line, [](std::int16_t const& sample) -> QRgb {
+        int v = int(sample);
+        int v1 = std::max(0, std::min(0xFF, v));
+        int v2 = std::max(0, std::min(0xFF, v - 0xFF));
+        int v3 = std::max(0, std::min(0xFF, 0xFF-v2));
+        // why backwards? :(
+        QRgb result = /*!v2
+                ? */QColor::fromRgb(v1, v1, v1).rgb()/*
+                : QColor::fromRgb(v3, v3, 255).rgb()*/;
+
+        return result;
     });
     update();
 }

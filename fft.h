@@ -12,47 +12,346 @@
 #include <iostream>
 #include <complex>
 
-#if 0 && defined(__GNUC__) && defined(__SSE4_2__)
-#include <xmmintrin.h>
-template<typename T>
-class Complex
+#if 1 && defined(__GNUC__) && defined(__SSE4_2__)
+#include <complex>
+template<typename TReal>
+class __attribute__((aligned(8))) Complex
 {
 public:
-    Complex& operator+=(Complex const& r) noexcept
-    {
-        vec += r.vec;
-    }
-    Complex& operator-=(Complex const& r) noexcept
-    {
-        vec -= r.vec;
-    }
-    Complex& operator*=(Complex const& r) noexcept
-    {
-        // a=((s1.rel)*(s2.rel))-((s1.img)*(s2.img));
-        // b=((s1.rel)*(s2.img))+((s2.rel)*(s1.img));
-        __m128d
-_mm_dp_ps()
-        vec2 swapped = __builtin_shuffle(r.vec, ivec2{1, 0});
-    }
-    Complex operator+(Complex const& r) const noexcept;
-    Complex operator-(Complex const& r) const noexcept;
-    Complex operator*(Complex const& r) const noexcept;
+    typedef TReal Real;
 
-    T real() const noexcept;
-    T imag() const noexcept;
+    constexpr Complex() noexcept : imagPart(0.0), realPart(0.0) {}
+    constexpr Complex(Real re) noexcept : imagPart(0.0), realPart(re) {}
+    constexpr Complex(Real re, Real im) noexcept : imagPart(im), realPart(re) {}
+    Real real() const noexcept { return realPart; }
+    Real imag() const noexcept { return imagPart; }
+    Complex operator +(Complex const& c) const noexcept
+    {
+        return Complex(realPart + c.realPart, imagPart + c.imagPart);
+    }
+    Complex& operator +=(Complex const& c) noexcept
+    {
+        realPart += c.realPart;
+        imagPart += c.imagPart;
+        return *this;
+    }
+    Complex operator -(Complex const& c) const noexcept
+    {
+        return Complex(realPart - c.realPart, imagPart - c.imagPart);
+    }
+    Complex& operator -=(Complex const& c) noexcept
+    {
+        realPart -= c.realPart;
+        imagPart -= c.imagPart;
+        return *this;
+    }
+    Complex operator *(Complex const& c) noexcept
+    {
+        return Complex(c.realPart * realPart - c.imagPart * imagPart,
+                c.realPart * imagPart + c.imagPart * realPart);
+    }
+    Complex& operator *=(Complex const& c) noexcept
+    {
+        Real reT = c.realPart * realPart - c.imagPart * imagPart;
+        imagPart = c.realPart * imagPart + c.imagPart * realPart;
+        realPart = reT;
+        return *this;
+    }
+    Complex operator -()
+    {
+        return Complex(-realPart, -imagPart);
+    }
 
-    void real(T value) noexcept;
-    void imag(T value) noexcept;
+    Real mod() const
+    {
+        return std::sqrt(realPart * realPart + imagPart * imagPart);
+    }
+
+    static void mod(Real *outputResult, Complex const *addr, size_t count, Real scale)
+    {
+        std::transform(addr, addr + count, outputResult, [scale](Complex const& i) {
+            return i.mod() * scale;
+        });
+    }
+
+    void stream_store(Complex *address)
+    {
+        address->imagPart = imagPart;
+        address->realPart = realPart;
+    }
 
 private:
-    typedef double __attribute__((vector_size(16))) vec2;
-    typedef __int64_t __attribute__((vector_size(16))) ivec2;
-
-    vec2 vec;
+    Real imagPart;
+    Real realPart;
 };
+
+#ifdef __SSE4_1__
+#include <smmintrin.h>
+template<>
+class __attribute__((aligned(16))) Complex<double>
+{
+public:
+    typedef double Real;
+
+    Complex() noexcept
+    {
+        mm = _mm_setzero_pd();
+    }
+
+    Complex(Real re) noexcept
+    {
+        mm = _mm_set_pd(re, 0.0);
+    }
+
+    Complex(Real re, Real im) noexcept
+    {
+        mm = _mm_set_pd(re, im);
+    }
+
+    Real real() const noexcept
+    {
+        return _mm_cvtsd_f64(_mm_shuffle_pd(mm, mm, _MM_SHUFFLE2(1, 1)));
+    }
+
+    Real imag() const noexcept
+    {
+        return _mm_cvtsd_f64(mm);
+    }
+
+    Complex operator +(Complex const& c) const noexcept
+    {
+        return Complex(_mm_add_pd(mm, c.mm));
+    }
+
+    Complex& operator +=(Complex const& c) noexcept
+    {
+        mm = _mm_add_pd(mm, c.mm);
+        return *this;
+    }
+
+    Complex operator -(Complex const& c) const noexcept
+    {
+        return Complex(_mm_sub_pd(mm, c.mm));
+    }
+
+    Complex& operator -=(Complex const& c) noexcept
+    {
+        mm = _mm_sub_pd(mm, c.mm);
+        return *this;
+    }
+
+    Complex operator *(Complex const& c) const noexcept
+    {
+        auto imagTmp = _mm_dp_pd(c.mm, _mm_shuffle_pd(mm, mm, _MM_SHUFFLE2(0, 1)), 0x31);
+        // Flip sign of the imaginary part
+        auto t = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
+        auto realTmp = _mm_dp_pd(c.mm, t, 0x31);
+        return Complex(_mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0)));
+    }
+
+    Complex& operator *=(Complex const& c) noexcept
+    {
+        auto imagTmp = _mm_shuffle_pd(mm, mm, _MM_SHUFFLE2(0, 1));
+        imagTmp = _mm_dp_pd(imagTmp, c.mm, 0x31);
+        // Flip sign of the imaginary part
+        mm = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
+        auto realTmp = _mm_dp_pd(mm, c.mm, 0x31);
+        mm = _mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0));
+
+//        Real reT = c.realPart * realPart - c.imagPart * imagPart;
+//        imagPart = c.realPart * imagPart + c.imagPart * realPart;
+//        realPart = reT;
+        return *this;
+    }
+
+    Complex operator -() const
+    {
+        return Complex(_mm_xor_pd(mm, _mm_set_pd(-0.0, -0.0)));
+    }
+
+    Real mod() const
+    {
+        auto tmp = _mm_dp_pd(mm, mm, 0x31);
+        return _mm_cvtsd_f64(_mm_sqrt_sd(tmp, tmp));
+    }
+
+    static void mod(Real *outputResult, Complex const *addr, size_t count, Real scale)
+    {
+        size_t i;
+        auto mmscale = _mm_set1_pd(scale);
+        for (i = 0; i != count && i + 1 != count; i += 2)
+        {
+            auto pair0 = addr[i].mm;
+            auto pair1 = addr[i + 1].mm;
+
+            pair0 = _mm_dp_pd(pair0, pair0, 0x31);
+            pair1 = _mm_dp_pd(pair1, pair1, 0x31);
+
+            pair0 = _mm_shuffle_pd(pair0, pair1, _MM_SHUFFLE2(0, 0));
+
+            pair0 = _mm_sqrt_pd(pair0);
+
+            pair0 = _mm_mul_pd(pair0, mmscale);
+
+            _mm_store_pd(outputResult + i, pair0);
+        }
+        for ( ; i < count; ++i)
+            _mm_store_sd(outputResult + i, _mm_mul_sd(_mm_sqrt_sd(_mm_setzero_pd(),
+                    _mm_dp_pd(addr[i].mm, addr[i].mm, 0x31)), mmscale));
+    }
+
+    void stream_store(Complex *address)
+    {
+        _mm_stream_pd((double*)&address->mm, mm);
+    }
+
+private:
+    explicit Complex(__m128d mm) : mm(mm) {}
+
+    __m128d mm;
+};
+
+#if 0
+template<>
+class __attribute__((aligned(16))) Complex<float>
+{
+public:
+    typedef float Real;
+
+    Complex() noexcept
+    {
+        mm = _mm_setzero_ps();
+    }
+
+    Complex(Real re) noexcept
+    {
+        mm = _mm_set_ps(0.0f, re, 0.0f, 0.0f);
+    }
+
+    Complex(Real re, Real im) noexcept
+    {
+        mm = _mm_set_ps(0.0f, re, 0.0f, im);
+    }
+
+    Real real() const noexcept
+    {
+        return _mm_cvtss_f32(_mm_shuffle_ps(mm, mm, _MM_SHUFFLE(3, 3, 3, 2)));
+    }
+
+    Real imag() const noexcept
+    {
+        return _mm_cvtss_f32(mm);
+    }
+
+    Complex operator +(Complex const& c) const noexcept
+    {
+        return Complex(_mm_add_ps(mm, c.mm));
+    }
+
+    Complex& operator +=(Complex const& c) noexcept
+    {
+        mm = _mm_add_ps(mm, c.mm);
+        return *this;
+    }
+
+    Complex operator -(Complex const& c) const noexcept
+    {
+        return Complex(_mm_sub_ps(mm, c.mm));
+    }
+
+    Complex& operator -=(Complex const& c) noexcept
+    {
+        mm = _mm_sub_ps(mm, c.mm);
+        return *this;
+    }
+
+    Complex operator *(Complex const& c) const noexcept
+    {
+        auto imagTmp = _mm_shuffle_ps(mm, mm, _MM_SHUFFLE(3, 0, 3, 2));
+        imagTmp = _mm_dp_ps(imagTmp, c.mm, 0x51);
+        // Flip sign of the imaginary part
+        auto t = _mm_xor_ps(mm, _mm_set_ps(0.0f, 0.0f, 0.0f, -0.0f));
+        auto realTmp = _mm_dp_ps(c.mm, t, 0x51);
+        auto result = _mm_shuffle_ps(imagTmp, realTmp, _MM_SHUFFLE(3, 0, 3, 0));
+        return Complex(result);
+    }
+
+    Complex& operator *=(Complex const& c) noexcept
+    {
+        auto imagTmp = _mm_shuffle_ps(mm, mm, _MM_SHUFFLE(3, 0, 3, 2));
+        imagTmp = _mm_dp_ps(imagTmp, c.mm, 0x51);
+        // Flip sign of the imaginary part
+        auto t = _mm_xor_ps(mm, _mm_set_ps(0.0f, 0.0f, 0.0f, -0.0f));
+        auto realTmp = _mm_dp_ps(c.mm, t, 0x51);
+        mm = _mm_shuffle_ps(imagTmp, realTmp, _MM_SHUFFLE(3, 0, 3, 0));
+        return *this;
+    }
+
+    Complex operator -()
+    {
+        return Complex(_mm_xor_ps(mm, _mm_set_ps(0.0f, -0.0f, 0.0f, -0.0f)));
+    }
+
+    Real mod() const
+    {
+        auto tmp = _mm_dp_ps(mm, mm, 0x51);
+        return _mm_cvtss_f32(_mm_sqrt_ss(tmp));
+    }
+
+    static void mod(Real *outputResult, Complex const *addr, size_t count, Real scale)
+    {
+        size_t i;
+        auto mmscale = _mm_set1_ps(scale);
+        for (i = 0; i + 3 < count; i += 4)
+        {
+            auto pair0 = addr[i].mm;
+            auto pair1 = addr[i + 1].mm;
+            auto pair2 = addr[i + 2].mm;
+            auto pair3 = addr[i + 3].mm;
+
+            pair0 = _mm_dp_ps(pair0, pair0, 0x51);
+            pair1 = _mm_dp_ps(pair1, pair1, 0x52);
+            pair0 = _mm_or_ps(pair0, pair1);
+            pair2 = _mm_dp_ps(pair2, pair2, 0x54);
+            pair3 = _mm_dp_ps(pair3, pair3, 0x58);
+            pair2 = _mm_or_ps(pair2, pair3);
+            pair0 = _mm_or_ps(pair0, pair2);
+
+            pair0 = _mm_sqrt_ps(pair0);
+            pair0 = _mm_mul_ps(pair0, mmscale);
+
+            _mm_store_ps(outputResult + i, pair0);
+        }
+        for ( ; i < count; ++i)
+            _mm_store_ss(outputResult + i,
+                    _mm_mul_ss(_mm_sqrt_ss(
+                    _mm_dp_ps(addr[i].mm, addr[i].mm, 0x51)),
+                    mmscale));
+    }
+
+    void stream_store(Complex *address)
+    {
+        _mm_stream_ps((float*)&address->mm, mm);
+    }
+
+private:
+    explicit Complex(__m128 mm) : mm(mm) {}
+
+    __m128 mm;
+};
+#endif
+#endif
+
+
+template<typename T>
+static inline T ComplexMagnitude(Complex<T> const& n) { return n.mod(); }
+
 #else
 template<typename T>
 using Complex = std::complex<T>;
+
+template<typename T>
+static inline T ComplexMagnitude(Complex<T> const& n) { return std::abs(n); }
 #endif
 
 template<typename T>
@@ -177,11 +476,6 @@ public:
             }
             step += step;
         }
-//        std::transform(x.data(), x.data() + halfPoints, output.data(),
-//                       [](Complex<Real>& value) {
-//            return std::abs(value) * normalizer;
-//        });
-        //Complex<Real>::mod(output.data(), x.data(), halfPoints, normalizer);
     }
 
     void process()
@@ -189,9 +483,8 @@ public:
         transform();
         std::transform(x.data(), x.data() + halfPoints, output.data(),
                        [](Complex<Real>& value) {
-            return std::abs(value) * normalizer;
+            return ComplexMagnitude(value) * normalizer;
         });
-        //Complex<Real>::mod(output.data(), x.data(), halfPoints, normalizer);
     }
 
     // Outputs halfPoints result values
@@ -208,8 +501,7 @@ public:
              typename IV = typename std::iterator_traits<InputIt>::value_type,
              typename = typename std::enable_if<std::is_convertible<IV, Real>::value>::type,
              typename OutputIt,
-             typename OV = typename std::iterator_traits<OutputIt>::value_type/*,
-             typename = typename std::enable_if<std::is_convertible<Real, OV>::value>::type*/>
+             typename OV = typename std::iterator_traits<OutputIt>::value_type>
     void process(InputIt st, InputIt en, OutputIt out, U scale = Real(1)) noexcept
     {
         copyIn(st, en, scale);
@@ -287,39 +579,6 @@ public:
     Real *getResultBuffer() noexcept
     {
         return output.data();
-    }
-
-    template<typename OutputIt,
-             typename V = typename std::iterator_traits<OutputIt>::value_type,
-             typename = typename std::enable_if<std::is_convertible<Real,V>::value>::type>
-    void rebuildInput(OutputIt out)
-    {
-        std::array<Real, halfPoints> result;
-        result.fill(Real(0));
-        // To maximize floating point precision, the frequencies are
-        // sorted by amplitude, with the lowest amplitudes being mixed
-        // in before the highest amplitudes
-        std::multimap<Real, int> amplitudes;
-        for (auto i = 0, e = halfPoints; i != e; ++i)
-            // Skip zero amplitudes
-            if (output[i] < Real(-0.0) || output[i] > Real(0.0))
-                amplitudes.emplace(output[i], i);
-        // Start at lowest amplitudes, end at highest amplitudes
-        auto basestep =  2 * 3.14159265358979323 / sampleRate;
-        for (auto i = amplitudes.begin(), e = amplitudes.end(); i != e; ++i)
-        {
-            auto point = i->second;
-            auto amplitude = i->first;
-            // Find frequency for this point
-            auto freq = getFrequency(point);
-            //
-            std::cout << "Frequency: " << freq << ", Amplitude: " << amplitude << std::endl;
-            // Mix a sine wave at that amplitude
-            auto step = basestep * freq;
-            for (std::size_t r = 0, e = result.size(); r != e; ++r)
-                result[r] += Real(amplitude * sin(step * r));
-        }
-        std::copy(result.begin(), result.end(), out);
     }
 
     void quantizeOutput(Real factor)
@@ -426,19 +685,18 @@ private:
     };
 
     static constexpr Real sqrtPoints = sqrtPointsLookup[logPoints];
-    //static constexpr Real normalizer = 1.0 / (1<<(logPoints / 2 - 1)) / sqrtPoints;
     static constexpr Real normalizer = normalizerLookup[logPoints];
 
     // No dynamic allocation!
     // All memory buffers are fixed size and part of this object
 
-    //typedef Compl
     typedef std::array<Real, points> TapeContainer;
     typedef std::array<int, points> BitRevContainer;
     typedef std::array<Complex<Real>, points> XContainer;
     typedef std::array<XContainer, logPoints> WContainer;
 
-    // Gaps
+    // Gaps are there to peturb the offsets and avoid set conflicts
+
     TapeContainer tape;
     __m128 gap0;
     BitRevContainer bitrev;
