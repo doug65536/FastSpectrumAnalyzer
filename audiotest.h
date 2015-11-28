@@ -32,7 +32,7 @@ public:
     int getBatchRate() const noexcept;
 
 private:
-    typedef FFT<float, 12> FFTType;
+    typedef FFT<float, 13> FFTType;
     std::unique_ptr<FFTType> fft;
 
     QAudioInput *ai;

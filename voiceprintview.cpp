@@ -21,12 +21,11 @@ void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
     std::transform(data, data + count, line, [](std::int16_t const& sample) -> QRgb {
         int v = int(sample);
         int v1 = std::max(0, std::min(0xFF, v));
-        int v2 = std::max(0, std::min(0xFF, v - 0xFF));
-        int v3 = std::max(0, std::min(0xFF, 0xFF-v2));
+        int v2 = 0xFF - std::max(0, std::min(0xFF, v >> 8));
         // why backwards? :(
-        QRgb result = /*!v2
-                ? */QColor::fromRgb(v1, v1, v1).rgb()/*
-                : QColor::fromRgb(v3, v3, 255).rgb()*/;
+        QRgb result = v2 == 0xFF
+                ? QColor::fromRgb(v1, v1, v1).rgb()
+                : QColor::fromRgb(v2, v2, 0xFF).rgb();
 
         return result;
     });

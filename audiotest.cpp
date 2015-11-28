@@ -25,7 +25,7 @@ void AudioReader::onReadyRead()
 
             Stopwatch sw;
             sw.start();
-            fft->process(stBuf, enMax, std::begin(result), 1.6);
+            fft->process(stBuf, enMax, std::begin(result), 2.6);
             sw.update();
 
             stBuf = enMax;
@@ -51,7 +51,7 @@ AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
-    , batchRatePerSec(120)
+    , batchRatePerSec(240)
     , batchSize(0)
     , bufLevel(0)
 {
@@ -77,7 +77,7 @@ void AudioReader::start()
 
     qDebug() << "Default == " << QAudioDeviceInfo::defaultInputDevice().deviceName();
     
-    afmt.setSampleRate(48000);
+    afmt.setSampleRate(96000);
     afmt.setChannelCount(1);
     afmt.setCodec("audio/pcm");
     afmt.setByteOrder(QAudioFormat::LittleEndian);
@@ -93,7 +93,7 @@ void AudioReader::start()
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(8192);
-    ai->setNotifyInterval(4);
+    ai->setNotifyInterval(16);
     qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
 
