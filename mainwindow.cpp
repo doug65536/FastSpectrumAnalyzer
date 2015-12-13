@@ -13,11 +13,16 @@ MainWindow::MainWindow(QWidget *parent) :
 
     audioReader = new AudioReader(this);
 
-    vpv = new VoicePrintView(this);
-    setCentralWidget(vpv);
+    //vpv = new VoicePrintView(this);
+    //setCentralWidget(vpv);
 
-    connect(audioReader, SIGNAL(incoming(const std::int16_t*,std::size_t)),
-            vpv, SLOT(deliverSamples(const std::int16_t*,std::size_t)));
+    vpv = ui->viewArea;
+
+    connect(audioReader, SIGNAL(incoming(std::int16_t const*,std::size_t)),
+            vpv, SLOT(deliverSamples(std::int16_t const*,std::size_t)));
+
+    connect(audioReader, SIGNAL(inputLevel(int)),
+            ui->inputLevel, SLOT(setValue(int)));
 
     audioReader->start();
 }
