@@ -20,6 +20,8 @@ public:
 public slots:
 
 private:
+    void timerEvent(QTimerEvent *event);
+
     AudioReader *audioReader;
     Ui::MainWindow *ui;
     VoicePrintView *vpv;

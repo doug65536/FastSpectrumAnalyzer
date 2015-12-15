@@ -10,7 +10,8 @@ VoicePrintView::VoicePrintView(QWidget *parent)
     setAttribute(Qt::WA_OpaquePaintEvent, true);
 }
 
-void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
+void VoicePrintView::deliverSamples(
+        const std::int16_t *data, std::size_t count)
 {
     QRgb* line = (QRgb*)img->scanLine(place++);
     if (place >= img->height())
@@ -18,7 +19,8 @@ void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
     // If it is too many, reduce it
     if (count > img->width())
         count = img->width();
-    std::transform(data, data + count, line, [](std::int16_t const& sample) -> QRgb {
+    std::transform(data, data + count, line,
+                   [](std::int16_t const& sample) -> QRgb {
         int v = int(sample);
         int v1 = std::max(0, std::min(0xFF, v));
         int v2 = 0xFF - std::max(0, std::min(0xFF, v >> 8));
@@ -29,7 +31,7 @@ void VoicePrintView::deliverSamples(const std::int16_t *data, std::size_t count)
 
         return result;
     });
-    update();
+    //update();
 }
 
 void VoicePrintView::paintEvent(QPaintEvent *pe)
@@ -70,7 +72,6 @@ void VoicePrintView::paintEvent(QPaintEvent *pe)
                   0, 0,
                   width, place);
     
-    //qp->drawImage(QPoint(0,0), *img);
     qp->end();
 }
 

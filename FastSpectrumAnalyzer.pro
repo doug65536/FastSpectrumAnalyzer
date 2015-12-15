@@ -19,7 +19,8 @@ SOURCES += main.cpp\
     tostring.cpp \
     voiceprintview.cpp \
     audiotest.cpp \
-    taskqueue.cpp
+    taskqueue.cpp \
+    inputtoolbox.cpp
 
 HEADERS  += mainwindow.h \
     fft.h \
@@ -28,9 +29,11 @@ HEADERS  += mainwindow.h \
     tostring.h \
     voiceprintview.h \
     audiotest.h \
-    taskqueue.h
+    taskqueue.h \
+    inputtoolbox.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    inputtoolbox.ui
 
 CONFIG += c++11
 CONFIG += mobility
@@ -44,8 +47,22 @@ MOBILITY =
 QMAKE_CXXFLAGS_DEBUG -= -O0
 QMAKE_LFLAGS_DEBUG += -O0
 
-QMAKE_CXXFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize -pg
-QMAKE_LFLAGS_RELEASE += -march=native -ffast-math -g -ftree-vectorize -pg
+QMAKE_CXXFLAGS_DEBUG += -march=native -ffast-math
+QMAKE_CXXFLAGS_RELEASE += -march=native -ffast-math
+QMAKE_LFLAGS_RELEASE += -march=native -ffast-math
+
+QMAKE_CXXFLAGS_RELEASE -= -pg
+QMAKE_LFLAGS_RELEASE -= -pg
+QMAKE_CXXFLAGS_RELEASE -= -g
+QMAKE_LFLAGS_RELEASE -= -g
+#QMAKE_CXXFLAGS_RELEASE += -pg
+#QMAKE_LFLAGS_RELEASE += -pg
+#QMAKE_CXXFLAGS_RELEASE += -g
+#QMAKE_LFLAGS_RELEASE += -g
+
+QMAKE_CXXFLAGS_RELEASE += -ftree-vectorize
+QMAKE_LFLAGS_RELEASE += -ftree-vectorize
+
 QMAKE_CXXFLAGS_RELEASE += -O3
 QMAKE_LFLAGS_RELEASE += -O3
 QMAKE_CXXFLAGS_RELEASE -= -O2

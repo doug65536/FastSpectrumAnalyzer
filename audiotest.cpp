@@ -7,9 +7,13 @@ void AudioReader::onReadyRead()
 {
     qint64 readresult;
 
-    while ((readresult = aio->read((char*)(buf.data() + bufLevel),
-            buf.size() - bufLevel)) > 0)
+    for (;;)
     {
+        readresult = aio->read((char*)(buf.data() + bufLevel),
+                               (buf.size() - bufLevel * sizeof(Sample)));
+        if (!readresult)
+            break;
+
         bufLevel += readresult / sizeof(short);
 
         auto beginBuf = std::begin(buf);
@@ -25,19 +29,22 @@ void AudioReader::onReadyRead()
 
             Stopwatch sw;
             sw.start();
-            fft->process(stBuf, enMax, std::begin(result), 2.6);
+            fft->process(stBuf, enMax, result, inverseGain);
             sw.update();
+
+            updateLevel(stBuf, enMax);
 
             stBuf = enMax;
 
-            std::transform(std::begin(result), std::end(result), std::begin(quantizedResult),
-            [&](float f)
-            {
-                return (std::min)((std::numeric_limits<std::int16_t>::max)(),
-                        std::int16_t(f + 0.5f));
-            });
+            //std::transform(std::begin(result),
+            //               std::end(result),
+            //               std::begin(quantizedResult),
+            //               [&](float f) {
+            //    return (std::min)((std::numeric_limits<Sample>::max)(),
+            //            Sample(f + 0.5f));
+            //});
 
-            emit incoming(quantizedResult, FFTType::halfPoints);
+            emit incoming(std::begin(result), FFTType::halfPoints);
         }
 
         if (stBuf != beginBuf) {
@@ -47,13 +54,25 @@ void AudioReader::onReadyRead()
     }
 }
 
+void AudioReader::setGain(int gain)
+{
+    inverseGain = 0.0005 * gain;
+}
+
+void AudioReader::setBatchRate(int ratePerSec)
+{
+    batchRatePerSec = ratePerSec;
+    batchSize = afmt.sampleRate() / ratePerSec;
+}
+
 AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
-    , batchRatePerSec(240)
+    , batchRatePerSec(60)
     , batchSize(0)
     , bufLevel(0)
+    , inverseGain(0.001)
 {
 }
 
@@ -77,7 +96,7 @@ void AudioReader::start()
 
     qDebug() << "Default == " << QAudioDeviceInfo::defaultInputDevice().deviceName();
     
-    afmt.setSampleRate(96000);
+    afmt.setSampleRate(48000);
     afmt.setChannelCount(1);
     afmt.setCodec("audio/pcm");
     afmt.setByteOrder(QAudioFormat::LittleEndian);
@@ -87,17 +106,60 @@ void AudioReader::start()
         return;
 
     QAudioDeviceInfo deviceinfo(QAudioDeviceInfo::defaultInputDevice());
+
+    for (auto supportedCodec : deviceinfo.supportedCodecs())
+    {
+        qDebug() << "Supported codec: " << supportedCodec;
+    }
+
+    char const* sampleType;
+    for (auto i : deviceinfo.supportedSampleTypes())
+    {
+        switch (i) {
+        case QAudioFormat::Unknown:
+            sampleType = "Unknown";
+            break;
+
+        case QAudioFormat::SignedInt:
+            sampleType = "SignedInt";
+            break;
+
+        case QAudioFormat::UnSignedInt:
+            sampleType = "UnSignedInt";
+            break;
+
+        case QAudioFormat::Float:
+            sampleType = "Float";
+            break;
+
+        default:
+            sampleType = "???";
+            break;
+        }
+        qDebug() << "Supports sample type: " << sampleType;
+    }
+
+    for (auto supportedRate: deviceinfo.supportedSampleRates())
+    {
+        qDebug() << "Supported rate: " << supportedRate;
+    }
+
+    for (auto supportedSize : deviceinfo.supportedSampleSizes())
+    {
+        qDebug() << "Supported size: " << supportedSize;
+    }
+
     if (!deviceinfo.isFormatSupported(afmt))
-        deviceinfo.nearestFormat(afmt);
+        afmt = deviceinfo.nearestFormat(afmt);
 
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(8192);
-    ai->setNotifyInterval(16);
+    ai->setNotifyInterval(4);
     qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
 
-    batchSize = afmt.sampleRate() / batchRatePerSec;
+    setBatchRate(batchRatePerSec);
 
     aio = ai->start();
     connect(aio, SIGNAL(readyRead()), this, SLOT(onReadyRead()));
@@ -114,6 +176,12 @@ void AudioReader::start()
     //qDebug() << "Err=" << err;
 
     fft.reset(new FFTType(afmt.sampleRate()));
+
+    level = 0;
+    emit inputLevel(level);
+
+    startTimer(100);
+
 }
 
 void AudioReader::onNotify()
@@ -125,4 +193,23 @@ void AudioReader::stop()
 {
     aio->close();
     ai->stop();
+}
+
+void AudioReader::timerEvent(QTimerEvent *event)
+{
+    Sample curlevel = 0;
+    std::swap(curlevel, level);
+    emit inputLevel(curlevel);
+}
+
+AudioReader::Sample
+AudioReader::updateLevel(Sample const* st,
+                         Sample const* en)
+{
+     level = std::accumulate(st, en, level,
+    [](Sample level, Sample sample) {
+        Sample absSample = std::abs(sample);
+        return (std::max)(level, absSample);
+    });
+    return level;
 }

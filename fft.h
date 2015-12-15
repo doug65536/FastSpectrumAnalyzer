@@ -12,10 +12,10 @@
 #include <iostream>
 #include <complex>
 
-#if 1 && defined(__GNUC__) && defined(__SSE4_2__)
+#if 1
 #include <complex>
 template<typename TReal>
-class __attribute__((aligned(8))) Complex
+class __attribute__((aligned(16))) Complex
 {
 public:
     typedef TReal Real;
@@ -67,10 +67,17 @@ public:
         return std::sqrt(realPart * realPart + imagPart * imagPart);
     }
 
-    static void mod(Real *outputResult, Complex const *addr, size_t count, Real scale)
+    template<typename OutputIt,
+             typename OV = typename std::iterator_traits<OutputIt>::value_type>
+    static void mod(OutputIt outputResult, Complex const *addr, size_t count, Real scale)
     {
-        std::transform(addr, addr + count, outputResult, [scale](Complex const& i) {
-            return i.mod() * scale;
+        Real hi = Real((std::numeric_limits<OV>::max)());
+        Real lo = Real((std::numeric_limits<OV>::min)());
+        std::transform(addr, addr + count, outputResult, [&](Complex const& i) {
+            Real a = i.mod() * scale;
+            Real b = std::max(lo, a);
+            Real c = std::min(hi, b);
+            return c;
         });
     }
 
@@ -142,11 +149,16 @@ public:
 
     Complex operator *(Complex const& c) const noexcept
     {
-        auto imagTmp = _mm_dp_pd(c.mm, _mm_shuffle_pd(mm, mm, _MM_SHUFFLE2(0, 1)), 0x31);
-        // Flip sign of the imaginary part
+        //r.img = a.img*c.real + a.real*c.img;
+        //r.real = a.real*c.real - a.img*c.img;
+
         auto t = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
-        auto realTmp = _mm_dp_pd(c.mm, t, 0x31);
-        return Complex(_mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0)));
+        auto swappedC = _mm_shuffle_pd(c.mm, c.mm, _MM_SHUFFLE2(0, 1));
+        auto realTmp = _mm_mul_pd(c.mm, t);
+        auto imagTmp = _mm_mul_pd(mm, swappedC);
+        auto product = _mm_hadd_pd(imagTmp, realTmp);
+        return Complex(product);
+        //return Complex(_mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0)));
     }
 
     Complex& operator *=(Complex const& c) noexcept
@@ -157,10 +169,6 @@ public:
         mm = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
         auto realTmp = _mm_dp_pd(mm, c.mm, 0x31);
         mm = _mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0));
-
-//        Real reT = c.realPart * realPart - c.imagPart * imagPart;
-//        imagPart = c.realPart * imagPart + c.imagPart * realPart;
-//        realPart = reT;
         return *this;
     }
 
@@ -175,11 +183,11 @@ public:
         return _mm_cvtsd_f64(_mm_sqrt_sd(tmp, tmp));
     }
 
-    static void mod(Real *outputResult, Complex const *addr, size_t count, Real scale)
+    static void mod(double *outputResult, Complex const *addr, size_t count, Real scale)
     {
         size_t i;
         auto mmscale = _mm_set1_pd(scale);
-        for (i = 0; i != count && i + 1 != count; i += 2)
+        for (i = 0; i != count && i + 1 < count; i += 2)
         {
             auto pair0 = addr[i].mm;
             auto pair1 = addr[i + 1].mm;
@@ -199,6 +207,146 @@ public:
             _mm_store_sd(outputResult + i, _mm_mul_sd(_mm_sqrt_sd(_mm_setzero_pd(),
                     _mm_dp_pd(addr[i].mm, addr[i].mm, 0x31)), mmscale));
     }
+
+#ifdef __fuckAVX__
+    static void mod(short *outputResult, Complex const *addr, size_t count, Real scale)
+    {
+        size_t i;
+        auto mmscale = _mm_set1_pd(scale);
+        auto lo = _mm_set1_pd(std::numeric_limits<std::int16_t>::min());
+        auto hi = _mm_set1_pd(std::numeric_limits<std::int16_t>::max());
+        for (i = 0; i != count && i + 7 < count; i += 8)
+        {
+            auto quad0 = _mm256_load_pd((double*)&addr[i].mm);
+            auto quad2 = _mm256_load_pd((double*)&addr[i+2].mm);
+            auto quad4 = _mm256_load_pd((double*)&addr[i+4].mm);
+            auto quad6 = _mm256_load_pd((double*)&addr[i+6].mm);
+
+            quad0 = _mm256_mul_pd(quad0, quad0);
+            quad2 = _mm256_mul_pd(quad2, quad2);
+            quad4 = _mm256_mul_pd(quad4, quad4);
+            quad6 = _mm256_mul_pd(quad6, quad6);
+
+            quad0 = _mm256_hadd_pd(quad0, quad2);
+            quad4 = _mm256_hadd_pd(quad4, quad6);
+
+            quad0 = _mm256_sqrt_pd(quad0);
+            quad4 = _mm256_sqrt_pd(quad4);
+
+            quad0 = _mm256_mul_pd(quad0, mmscale);
+            quad4 = _mm256_mul_pd(quad4, mmscale);
+
+            // Clamp
+            quad0 = _mm256_max_pd(quad0, lo);
+            quad4 = _mm256_max_pd(quad4, lo);
+
+            quad0 = _mm256_min_pd(pair0, hi);
+            quad4 = _mm256_min_pd(pair4, hi);
+
+            auto iquad0 = _mm256_cvttpd_epi32(pair0);
+            auto iquad4 = _mm256_cvttpd_epi32(pair4);
+
+            iquad4 = _mm256_shuffle_i32x4_pd(iquad4, _MM_SHUFFLE(1, 0, 1, 1));
+
+            iquad0 = _mm_or_si128(iquad0, iquad2);
+            iquad4 = _mm_or_si128(iquad4, iquad6);
+            iquad0 = _mm_or_si128(iquad0, iquad4);
+
+            _mm256_storeu_si256((__m256i*)(outputResult + i), iquad0);
+        }
+        for ( ; i < count; ++i) {
+            auto pair0 = addr[i].mm;
+            pair0 = _mm_dp_pd(pair0, pair0, 0x31);
+            pair0 = _mm_sqrt_sd(_mm_setzero_pd(), pair0);
+            pair0 = _mm_mul_sd(pair0, mmscale);
+            pair0 = _mm_max_sd(pair0, lo);
+            pair0 = _mm_min_sd(pair0, hi);
+            outputResult[i] = std::int16_t(_mm_cvtsd_si32(pair0));
+        }
+    }
+#else
+    static void mod(short *outputResult, Complex const *addr, size_t count, Real scale)
+    {
+        size_t i;
+        auto mmscale = _mm_set1_pd(scale);
+        auto lo = _mm_set1_pd(std::numeric_limits<std::int16_t>::min());
+        auto hi = _mm_set1_pd(std::numeric_limits<std::int16_t>::max());
+        for (i = 0; i != count && i + 7 < count; i += 8)
+        {
+            auto pair0 = addr[i].mm;
+            auto pair1 = addr[i + 1].mm;
+            auto pair2 = addr[i + 2].mm;
+            auto pair3 = addr[i + 3].mm;
+            auto pair4 = addr[i + 4].mm;
+            auto pair5 = addr[i + 5].mm;
+            auto pair6 = addr[i + 6].mm;
+            auto pair7 = addr[i + 7].mm;
+
+            pair0 = _mm_mul_pd(pair0, pair0);
+            pair1 = _mm_mul_pd(pair1, pair1);
+            pair2 = _mm_mul_pd(pair2, pair2);
+            pair3 = _mm_mul_pd(pair3, pair3);
+            pair4 = _mm_mul_pd(pair4, pair4);
+            pair5 = _mm_mul_pd(pair5, pair5);
+            pair6 = _mm_mul_pd(pair6, pair6);
+            pair7 = _mm_mul_pd(pair7, pair7);
+
+            pair0 = _mm_hadd_pd(pair0, pair1);
+            pair2 = _mm_hadd_pd(pair2, pair3);
+            pair4 = _mm_hadd_pd(pair4, pair5);
+            pair6 = _mm_hadd_pd(pair6, pair7);
+
+            pair0 = _mm_sqrt_pd(pair0);
+            pair2 = _mm_sqrt_pd(pair2);
+            pair4 = _mm_sqrt_pd(pair4);
+            pair6 = _mm_sqrt_pd(pair6);
+
+            pair0 = _mm_mul_pd(pair0, mmscale);
+            pair2 = _mm_mul_pd(pair2, mmscale);
+            pair4 = _mm_mul_pd(pair4, mmscale);
+            pair6 = _mm_mul_pd(pair6, mmscale);
+
+            // Clamp
+            pair0 = _mm_max_pd(pair0, lo);
+            pair2 = _mm_max_pd(pair2, lo);
+            pair4 = _mm_max_pd(pair4, lo);
+            pair6 = _mm_max_pd(pair6, lo);
+
+            pair0 = _mm_min_pd(pair0, hi);
+            pair2 = _mm_min_pd(pair2, hi);
+            pair4 = _mm_min_pd(pair4, hi);
+            pair6 = _mm_min_pd(pair6, hi);
+
+            // Convert to pair of 32
+            auto ipair0 = _mm_cvtpd_epi32(pair0);
+            auto ipair2 = _mm_cvtpd_epi32(pair2);
+            auto ipair4 = _mm_cvtpd_epi32(pair4);
+            auto ipair6 = _mm_cvtpd_epi32(pair6);
+
+            // Squeeze 4 values into each, in wrong order
+            ipair0 = _mm_unpacklo_epi32(ipair0, ipair2);
+            ipair4 = _mm_unpacklo_epi32(ipair4, ipair6);
+
+            // Fix order
+            ipair0 = _mm_shuffle_epi32(ipair0, _MM_SHUFFLE(3, 1, 2, 0));
+            ipair4 = _mm_shuffle_epi32(ipair4, _MM_SHUFFLE(3, 1, 2, 0));
+
+            // 32->16
+            ipair0 = _mm_packs_epi32(ipair0, ipair4);
+
+            _mm_storeu_si128((__m128i*)(outputResult + i), ipair0);
+        }
+        for ( ; i < count; ++i) {
+            auto pair0 = addr[i].mm;
+            pair0 = _mm_dp_pd(pair0, pair0, 0x31);
+            pair0 = _mm_sqrt_sd(_mm_setzero_pd(), pair0);
+            pair0 = _mm_mul_sd(pair0, mmscale);
+            pair0 = _mm_max_sd(pair0, lo);
+            pair0 = _mm_min_sd(pair0, hi);
+            outputResult[i] = std::int16_t(_mm_cvtsd_si32(pair0));
+        }
+    }
+#endif
 
     void stream_store(Complex *address)
     {
@@ -379,9 +527,9 @@ class __attribute__((aligned(16))) FFT
 public:
     typedef Real value_type;
 
-    static constexpr int log2Points = logPoints;
-    static constexpr int points = 1 << logPoints;
-    static constexpr int halfPoints = 1 << (logPoints-1);
+    static constexpr std::size_t log2Points = logPoints;
+    static constexpr std::size_t points = 1 << logPoints;
+    static constexpr std::size_t halfPoints = 1 << (logPoints-1);
 
     typedef std::array<Real, halfPoints> ResultContainer;
 
@@ -420,7 +568,8 @@ public:
         // to quantize the noise away while having no effect on peak result
         if (quantized)
         {
-            volatile Real tmp = (x[point].mod() * normalizer + Quantizer<Real>::value);
+            volatile Real tmp = (x[point].mod() * normalizer +
+                                 Quantizer<Real>::value);
             return tmp - Quantizer<Real>::value;
         }
         return x[point].mod() * normalizer;
@@ -462,8 +611,8 @@ public:
             int increm = step + step;
             for (int j = 0; j < step; ++j)
             {
-                auto u = w[level][j];
-                for (int i = j; i < points; i += increm)
+                auto const& u = w[level][j];
+                for (std::size_t i = j; i < points; i += increm)
                 {
                     auto a = x[i];
                     auto b = x[i+step];
@@ -481,20 +630,49 @@ public:
     void process()
     {
         transform();
-        std::transform(x.data(), x.data() + halfPoints, output.data(),
-                       [](Complex<Real>& value) {
-            return ComplexMagnitude(value) * normalizer;
-        });
+        Complex<Real>::mod(output.data(),
+                           x.data(),
+                           halfPoints,
+                           normalizer);
     }
+
+    // Outputs halfPoints result values
+    //template<typename OutputIt,
+    //         typename OV = typename std::iterator_traits<OutputIt>::value_type,
+    //         typename = typename std::is_convertible<Real, OV>::type>
+    //void process(double* out, Real scale = Real(1)) noexcept
+    //{
+    //    transform();
+    //    Complex<Real>::mod(out,
+    //                       x.data(),
+    //                       halfPoints,
+    //                       scale);
+    //}
+    //
+    //// Outputs halfPoints result values
+    //template<typename OutputIt,
+    //         typename OV = typename std::iterator_traits<OutputIt>::value_type,
+    //         typename = typename std::is_convertible<Real, OV>::type>
+    //void process(short* out, Real scale = Real(1)) noexcept
+    //{
+    //    transform();
+    //    Complex<Real>::mod(out,
+    //                       x.data(),
+    //                       halfPoints,
+    //                       scale);
+    //}
 
     // Outputs halfPoints result values
     template<typename OutputIt,
              typename OV = typename std::iterator_traits<OutputIt>::value_type,
              typename = typename std::is_convertible<Real, OV>::type>
-    void process(OutputIt out) noexcept
+    void process(OutputIt out, Real scale = Real(1)) noexcept
     {
-        process();
-        std::copy(std::begin(output), std::end(output), out);
+        transform();
+        Complex<Real>::mod(out,
+                           x.data(),
+                           halfPoints,
+                           scale);
     }
 
     template<typename InputIt, typename U = Real,
@@ -504,8 +682,8 @@ public:
              typename OV = typename std::iterator_traits<OutputIt>::value_type>
     void process(InputIt st, InputIt en, OutputIt out, U scale = Real(1)) noexcept
     {
-        copyIn(st, en, scale);
-        process(out);
+        copyIn(st, en);
+        process(out, scale);
     }
 
     void put(int i, Real val) noexcept
@@ -544,7 +722,7 @@ public:
              typename = typename std::is_convertible<V, Real>::type>
     void copyIn(InputIt st, InputIt en, U scale = Real(1)) noexcept
     {
-        auto n = std::distance(st, en);
+        std::size_t n = std::distance(st, en);
 
         if (n > tape.size())
         {
@@ -565,7 +743,8 @@ public:
         });
 
         // Scatter the data into x using bitrev
-        for (auto i = 0, e = points; i != e; ++i)
+        for (std::size_t i = 0, e = points;
+             i != e; ++i)
             put(i, tape[i]);
     }
 
@@ -604,7 +783,7 @@ private:
         Real l2 = 2;
         for (auto level = 0; level < logPoints; ++level)
         {
-            for (auto i = 0; i < points; ++i)
+            for (std::size_t i = 0; i < points; ++i)
             {
                 Real re = std::cos(Real(2) * Real(3.14159265358979323) * i / l2);
                 Real im = -std::sin(Real(2) * Real(3.14159265358979323) * i / l2);
@@ -615,7 +794,7 @@ private:
 
         // Generate bit reversed index lookup table
         int rev = 0;
-        for (auto i = 0; i < points - 1; ++i)
+        for (std::size_t i = 0; i < points - 1; ++i)
         {
             bitrev[i] = rev;
             int mask = halfPoints;

@@ -13,11 +13,24 @@ MainWindow::MainWindow(QWidget *parent) :
 
     audioReader = new AudioReader(this);
 
-    vpv = new VoicePrintView(this);
-    setCentralWidget(vpv);
+    //vpv = new VoicePrintView(this);
+    //setCentralWidget(vpv);
 
-    connect(audioReader, SIGNAL(incoming(const std::int16_t*,std::size_t)),
-            vpv, SLOT(deliverSamples(const std::int16_t*,std::size_t)));
+    vpv = ui->viewArea;
+
+    connect(audioReader, SIGNAL(incoming(std::int16_t const*,std::size_t)),
+            vpv, SLOT(deliverSamples(std::int16_t const*,std::size_t)));
+
+    connect(audioReader, SIGNAL(inputLevel(int)),
+            ui->inputLevel, SLOT(setValue(int)));
+
+    connect(ui->inputGain, SIGNAL(valueChanged(int)),
+            audioReader, SLOT(setGain(int)));
+
+    connect(ui->speedSlider, SIGNAL(valueChanged(int)),
+            audioReader, SLOT(setBatchRate(int)));
+
+    startTimer(8, Qt::PreciseTimer);
 
     audioReader->start();
 }
@@ -25,4 +38,9 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::timerEvent(QTimerEvent *event)
+{
+    ui->viewArea->repaint();
 }
