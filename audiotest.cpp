@@ -7,9 +7,13 @@ void AudioReader::onReadyRead()
 {
     qint64 readresult;
 
-    while ((readresult = aio->read((char*)(buf.data() + bufLevel),
-            buf.size() - bufLevel)) > 0)
+    for (;;)
     {
+        readresult = aio->read((char*)(buf.data() + bufLevel),
+                               (buf.size() - bufLevel * sizeof(Sample)));
+        if (!readresult)
+            break;
+
         bufLevel += readresult / sizeof(short);
 
         auto beginBuf = std::begin(buf);
@@ -25,7 +29,7 @@ void AudioReader::onReadyRead()
 
             Stopwatch sw;
             sw.start();
-            fft->process(stBuf, enMax, result, 1/16.0);
+            fft->process(stBuf, enMax, result, inverseGain);
             sw.update();
 
             updateLevel(stBuf, enMax);
@@ -50,13 +54,25 @@ void AudioReader::onReadyRead()
     }
 }
 
+void AudioReader::setGain(int gain)
+{
+    inverseGain = 0.0005 * gain;
+}
+
+void AudioReader::setBatchRate(int ratePerSec)
+{
+    batchRatePerSec = ratePerSec;
+    batchSize = afmt.sampleRate() / ratePerSec;
+}
+
 AudioReader::AudioReader(QObject *parent)
     : QObject(parent)
     , ai(nullptr)
     , aio(nullptr)
-    , batchRatePerSec(120)
+    , batchRatePerSec(60)
     , batchSize(0)
     , bufLevel(0)
+    , inverseGain(0.001)
 {
 }
 
@@ -139,11 +155,11 @@ void AudioReader::start()
     QAudio::Error err;
     ai = new QAudioInput(deviceinfo, afmt, this);
     ai->setBufferSize(8192);
-    ai->setNotifyInterval(16);
+    ai->setNotifyInterval(4);
     qDebug() << "Actual notify interval " << ai->notifyInterval();
     connect(ai, SIGNAL(notify()), this, SLOT(onNotify()));
 
-    batchSize = afmt.sampleRate() / batchRatePerSec;
+    setBatchRate(batchRatePerSec);
 
     aio = ai->start();
     connect(aio, SIGNAL(readyRead()), this, SLOT(onReadyRead()));
@@ -161,9 +177,10 @@ void AudioReader::start()
 
     fft.reset(new FFTType(afmt.sampleRate()));
 
-    startTimer(100);
     level = 0;
     emit inputLevel(level);
+
+    startTimer(100);
 
 }
 
@@ -189,7 +206,7 @@ AudioReader::Sample
 AudioReader::updateLevel(Sample const* st,
                          Sample const* en)
 {
-    level = std::accumulate(st, en, level,
+     level = std::accumulate(st, en, level,
     [](Sample level, Sample sample) {
         Sample absSample = std::abs(sample);
         return (std::max)(level, absSample);

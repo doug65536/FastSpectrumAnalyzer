@@ -24,10 +24,23 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(audioReader, SIGNAL(inputLevel(int)),
             ui->inputLevel, SLOT(setValue(int)));
 
+    connect(ui->inputGain, SIGNAL(valueChanged(int)),
+            audioReader, SLOT(setGain(int)));
+
+    connect(ui->speedSlider, SIGNAL(valueChanged(int)),
+            audioReader, SLOT(setBatchRate(int)));
+
+    startTimer(8, Qt::PreciseTimer);
+
     audioReader->start();
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::timerEvent(QTimerEvent *event)
+{
+    ui->viewArea->repaint();
 }

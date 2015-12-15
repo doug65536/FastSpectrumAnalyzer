@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>797</width>
-    <height>474</height>
+    <width>745</width>
+    <height>459</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,82 +17,108 @@
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <widget class="VoicePrintView" name="viewArea" native="true">
-      <layout class="QFormLayout" name="formLayout">
-       <item row="0" column="0">
-        <spacer name="horizontalSpacer">
+      <widget class="QToolBox" name="toolBox">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>399</x>
+         <y>9</y>
+         <width>331</width>
+         <height>141</height>
+        </rect>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="currentIndex">
+        <number>1</number>
+       </property>
+       <widget class="QWidget" name="meterPage">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>317</width>
+          <height>62</height>
+         </rect>
+        </property>
+        <attribute name="label">
+         <string>Meter</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout">
+         <item row="1" column="0">
+          <widget class="QProgressBar" name="inputLevel">
+           <property name="maximum">
+            <number>32768</number>
+           </property>
+           <property name="value">
+            <number>24</number>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QSlider" name="inputGain">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="ratePage">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>331</width>
+          <height>54</height>
+         </rect>
+        </property>
+        <attribute name="label">
+         <string>Rate</string>
+        </attribute>
+        <widget class="QSlider" name="speedSlider">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>0</y>
+           <width>299</width>
+           <height>15</height>
+          </rect>
+         </property>
+         <property name="minimum">
+          <number>30</number>
+         </property>
+         <property name="maximum">
+          <number>960</number>
+         </property>
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
          </property>
-         <property name="sizeType">
-          <enum>QSizePolicy::Expanding</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>400</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item row="0" column="1">
-        <widget class="QToolBox" name="toolBox">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="currentIndex">
-          <number>0</number>
-         </property>
-         <widget class="QWidget" name="meterPage">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>0</y>
-            <width>355</width>
-            <height>79</height>
-           </rect>
-          </property>
-          <attribute name="label">
-           <string>Meter</string>
-          </attribute>
-          <layout class="QGridLayout" name="gridLayout">
-           <item row="0" column="0">
-            <widget class="QSlider" name="horizontalSlider">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QProgressBar" name="inputLevel">
-             <property name="maximum">
-              <number>32768</number>
-             </property>
-             <property name="value">
-              <number>24</number>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-         <widget class="QWidget" name="aboutPage">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>0</y>
-            <width>355</width>
-            <height>79</height>
-           </rect>
-          </property>
-          <attribute name="label">
-           <string>About</string>
-          </attribute>
-         </widget>
         </widget>
-       </item>
-      </layout>
+       </widget>
+       <widget class="QWidget" name="aboutPage">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>331</width>
+          <height>54</height>
+         </rect>
+        </property>
+        <attribute name="label">
+         <string>About</string>
+        </attribute>
+       </widget>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -102,8 +128,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>797</width>
-     <height>25</height>
+     <width>745</width>
+     <height>20</height>
     </rect>
    </property>
   </widget>

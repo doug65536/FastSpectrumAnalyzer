@@ -149,11 +149,16 @@ public:
 
     Complex operator *(Complex const& c) const noexcept
     {
-        auto imagTmp = _mm_dp_pd(c.mm, _mm_shuffle_pd(mm, mm, _MM_SHUFFLE2(0, 1)), 0x31);
-        // Flip sign of the imaginary part
+        //r.img = a.img*c.real + a.real*c.img;
+        //r.real = a.real*c.real - a.img*c.img;
+
         auto t = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
-        auto realTmp = _mm_dp_pd(c.mm, t, 0x31);
-        return Complex(_mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0)));
+        auto swappedC = _mm_shuffle_pd(c.mm, c.mm, _MM_SHUFFLE2(0, 1));
+        auto realTmp = _mm_mul_pd(c.mm, t);
+        auto imagTmp = _mm_mul_pd(mm, swappedC);
+        auto product = _mm_hadd_pd(imagTmp, realTmp);
+        return Complex(product);
+        //return Complex(_mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0)));
     }
 
     Complex& operator *=(Complex const& c) noexcept
@@ -164,10 +169,6 @@ public:
         mm = _mm_xor_pd(mm, _mm_set_pd(0.0, -0.0));
         auto realTmp = _mm_dp_pd(mm, c.mm, 0x31);
         mm = _mm_shuffle_pd(imagTmp, realTmp, _MM_SHUFFLE2(0, 0));
-
-//        Real reT = c.realPart * realPart - c.imagPart * imagPart;
-//        imagPart = c.realPart * imagPart + c.imagPart * realPart;
-//        realPart = reT;
         return *this;
     }
 
@@ -316,18 +317,22 @@ public:
             pair4 = _mm_min_pd(pair4, hi);
             pair6 = _mm_min_pd(pair6, hi);
 
-            auto ipair0 = _mm_cvttpd_epi32(pair0);
-            auto ipair2 = _mm_cvttpd_epi32(pair2);
-            auto ipair4 = _mm_cvttpd_epi32(pair4);
-            auto ipair6 = _mm_cvttpd_epi32(pair6);
+            // Convert to pair of 32
+            auto ipair0 = _mm_cvtpd_epi32(pair0);
+            auto ipair2 = _mm_cvtpd_epi32(pair2);
+            auto ipair4 = _mm_cvtpd_epi32(pair4);
+            auto ipair6 = _mm_cvtpd_epi32(pair6);
 
-            ipair2 = _mm_shuffle_epi32(ipair2, _MM_SHUFFLE(1, 1, 0, 1));
-            ipair4 = _mm_shuffle_epi32(ipair4, _MM_SHUFFLE(1, 0, 1, 1));
-            ipair6 = _mm_shuffle_epi32(ipair6, _MM_SHUFFLE(0, 1, 1, 1));
+            // Squeeze 4 values into each, in wrong order
+            ipair0 = _mm_unpacklo_epi32(ipair0, ipair2);
+            ipair4 = _mm_unpacklo_epi32(ipair4, ipair6);
 
-            ipair0 = _mm_or_si128(ipair0, ipair2);
-            ipair4 = _mm_or_si128(ipair4, ipair6);
-            ipair0 = _mm_or_si128(ipair0, ipair4);
+            // Fix order
+            ipair0 = _mm_shuffle_epi32(ipair0, _MM_SHUFFLE(3, 1, 2, 0));
+            ipair4 = _mm_shuffle_epi32(ipair4, _MM_SHUFFLE(3, 1, 2, 0));
+
+            // 32->16
+            ipair0 = _mm_packs_epi32(ipair0, ipair4);
 
             _mm_storeu_si128((__m128i*)(outputResult + i), ipair0);
         }

@@ -21,7 +21,7 @@ void VoicePrintView::deliverSamples(
         count = img->width();
     std::transform(data, data + count, line,
                    [](std::int16_t const& sample) -> QRgb {
-        int v = int(sample) >> 8;
+        int v = int(sample);
         int v1 = std::max(0, std::min(0xFF, v));
         int v2 = 0xFF - std::max(0, std::min(0xFF, v >> 8));
         // why backwards? :(
@@ -31,7 +31,7 @@ void VoicePrintView::deliverSamples(
 
         return result;
     });
-    update();
+    //update();
 }
 
 void VoicePrintView::paintEvent(QPaintEvent *pe)
